@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Analizador de modelos de regresión</title>
+  <style>
+    :root { color-scheme: light; --ink:#18332d; --muted:#63756f; --line:#dfe8e3; --paper:#f4f7f5; --white:#fff; --green:#187a5a; --green-soft:#e7f3ed; --orange:#e78a32; --red:#a33c32; --shadow:0 10px 30px rgba(27,62,49,.07); }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--paper); color:var(--ink); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+    .wrap { width:min(1180px, calc(100% - 36px)); margin:0 auto; padding:35px 0 60px; }
+    header { margin-bottom:25px; }
+    .eyebrow { color:var(--green); font-size:12px; font-weight:750; letter-spacing:.12em; text-transform:uppercase; }
+    h1 { margin:5px 0 6px; font-size:clamp(27px,4vw,38px); letter-spacing:-.04em; line-height:1.15; }
+    h2 { margin:0; font-size:19px; letter-spacing:-.02em; }
+    h3 { margin:0; font-size:15px; }
+    p { margin:0; color:var(--muted); }
+    .lead { max-width:760px; font-size:16px; }
+    .card { background:var(--white); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); padding:22px; margin:16px 0; }
+    .card-head { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:16px; }
+    .step { color:var(--green); font-size:12px; font-weight:800; margin-bottom:4px; }
+    .upload { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:20px; border:1.5px dashed #a9c9b9; border-radius:13px; background:#f8fcf9; }
+    .upload strong { display:block; margin-bottom:3px; }
+    input[type=file] { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; clip-path:inset(50%); border:0; }
+    button,.file-button { border:0; border-radius:10px; background:var(--green); color:#fff; padding:11px 16px; font:inherit; font-weight:700; cursor:pointer; white-space:nowrap; }
+    button:hover,.file-button:hover { background:#126348; }
+    button:disabled { background:#aabbb3; cursor:not-allowed; }
+    .file-button { display:inline-block; }
+    .note { font-size:12px; margin-top:10px; }
+    .status { display:none; padding:11px 13px; margin-top:13px; border-radius:9px; background:var(--green-soft); color:#255d48; font-size:13px; }
+    .status.error { background:#fff0ed; color:var(--red); }
+    .summary { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+    .pill { display:inline-flex; align-items:center; gap:6px; border-radius:30px; background:#eef3f0; color:#42574e; padding:5px 10px; font-size:12px; font-weight:650; }
+    .pill.numeric { background:#e9f1ff; color:#355c95; }
+    .pill.category { background:#fff1df; color:#89551b; }
+    .grid { display:grid; grid-template-columns:1fr 1.4fr; gap:18px; }
+    label.field { display:block; font-size:13px; font-weight:700; margin-bottom:7px; }
+    select { display:block; width:100%; min-height:42px; border:1px solid var(--line); border-radius:9px; padding:8px 10px; background:#fff; color:var(--ink); font:inherit; }
+    .predictors { max-height:270px; overflow:auto; border:1px solid var(--line); border-radius:10px; }
+    .predictor { display:flex; align-items:center; gap:10px; padding:9px 11px; border-bottom:1px solid #edf1ee; cursor:pointer; }
+    .predictor:last-child { border-bottom:0; }
+    .predictor:hover { background:#f7faf8; }
+    .predictor input { accent-color:var(--green); width:16px; height:16px; }
+    .predictor-name { font-weight:650; flex:1; overflow-wrap:anywhere; }
+    .predictor small { color:var(--muted); }
+    .options { display:flex; flex-wrap:wrap; align-items:center; gap:15px 24px; margin:16px 0; }
+    .options label { display:flex; gap:8px; align-items:center; font-size:13px; font-weight:650; }
+    .options input { accent-color:var(--green); }
+    .options select { width:auto; min-width:118px; }
+    .hint { border-left:3px solid #9bc9b2; padding:8px 11px; color:var(--muted); background:#f7fbf8; font-size:12px; }
+    .actions { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:17px; }
+    .muted { color:var(--muted); font-size:12px; }
+    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:11px; }
+    table { border-collapse:collapse; width:100%; min-width:860px; font-size:13px; }
+    th,td { padding:10px 12px; border-bottom:1px solid #e9efeb; text-align:right; white-space:nowrap; }
+    th { position:sticky; top:0; z-index:1; background:#f1f6f3; color:#435950; font-size:11px; letter-spacing:.02em; text-transform:uppercase; }
+    th:first-child,td:first-child,th:nth-child(2),td:nth-child(2) { text-align:left; }
+    tbody tr:last-child td { border-bottom:0; }
+    tbody tr.best { background:#eff8f2; }
+    .model-name { font-weight:750; }
+    .model-terms { max-width:310px; overflow:hidden; text-overflow:ellipsis; color:var(--muted); }
+    .best-mark { display:inline-block; margin-left:6px; color:var(--green); font-size:10px; font-weight:800; text-transform:uppercase; }
+    .metric-cell { font-variant-numeric:tabular-nums; }
+    .preview { max-height:260px; }
+    .preview table { min-width:600px; }
+    .preview th,.preview td { text-align:left; }
+    .results-top { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-end; gap:12px; margin:26px 0 13px; }
+    .results-top p { font-size:12px; margin-top:3px; }
+    .hidden { display:none!important; }
+    footer { margin-top:20px; color:var(--muted); font-size:12px; text-align:center; }
+    @media(max-width:760px) { .wrap{width:min(100% - 22px,1180px);padding-top:23px}.card{padding:16px}.grid{grid-template-columns:1fr}.upload{align-items:flex-start;flex-direction:column}.file-button{width:100%;text-align:center}.card-head{flex-direction:column}.options{gap:12px}.results-top{align-items:flex-start} }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <div class="eyebrow">Análisis local · regresión lineal</div>
+      <h1>Comparador de modelos</h1>
+      <p class="lead">Carga tus datos, elige una variable objetivo y uno o más predictores. El aplicativo evalúa todas las combinaciones posibles y compara su desempeño en datos de validación.</p>
+    </header>
+
+    <section class="card" aria-labelledby="upload-title">
+      <div class="card-head"><div><div class="step">PASO 1</div><h2 id="upload-title">Carga el archivo de datos</h2></div><span class="pill">El archivo se procesa en este navegador</span></div>
+      <div class="upload">
+        <div><strong id="file-name">Selecciona un archivo para comenzar</strong><p>Se usa la primera hoja si cargas un libro de Excel.</p></div>
+        <label class="file-button" for="file-input">Elegir archivo</label>
+        <input id="file-input" type="file" accept=".xlsx,.csv,.tsv,.txt,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+      </div>
+      <p class="note">Formatos compatibles: Excel .xlsx y archivos delimitados .csv, .tsv o .txt. Los archivos .xls antiguos deben guardarse primero como .xlsx.</p>
+      <div id="upload-status" class="status" role="status"></div>
+      <div id="data-summary" class="summary hidden"></div>
+      <div id="preview-section" class="hidden" style="margin-top:18px">
+        <h3 style="margin-bottom:9px">Vista previa</h3>
+        <div class="table-wrap preview"><table id="preview-table"></table></div>
+      </div>
+    </section>
+
+    <section id="selection-card" class="card hidden" aria-labelledby="selection-title">
+      <div class="card-head"><div><div class="step">PASO 2</div><h2 id="selection-title">Selecciona las variables</h2></div><span id="variable-count" class="pill"></span></div>
+      <div class="grid">
+        <div><label class="field" for="target-select">Variable Y (numérica)</label><select id="target-select"></select><p class="note">La variable Y debe contener valores numéricos.</p></div>
+        <div><label class="field">Variables X</label><div id="predictors" class="predictors"></div><p class="note">Marca las variables que quieres incluir. El aplicativo genera modelos para todas las combinaciones no vacías de las X seleccionadas.</p></div>
+      </div>
+      <div class="options">
+        <label for="interaction-toggle"><input id="interaction-toggle" type="checkbox" checked> Incluir interacciones por pares (Xᵢ × Xⱼ)</label>
+        <label for="split-select">Entrenamiento / validación <select id="split-select"><option value="0.75" selected>75 % / 25 %</option><option value="0.70">70 % / 30 %</option><option value="0.80">80 % / 20 %</option></select></label>
+      </div>
+      <div class="hint">Las columnas categóricas se codifican con indicadores (categoría base omitida). Con interacciones activas, cada modelo incluye los efectos principales y los productos por pares de las variables incluidas en ese modelo.</div>
+      <div class="actions"><button id="run-button" disabled>Generar y comparar modelos</button><span id="model-count" class="muted"></span></div>
+      <div id="run-status" class="status" role="status"></div>
+    </section>
+
+    <section id="results-section" class="card hidden" aria-labelledby="results-title">
+      <div class="card-head"><div><div class="step">RESULTADOS</div><h2 id="results-title">Desempeño de los modelos</h2><p id="result-caption" style="margin-top:5px"></p></div><span id="best-model-pill" class="pill"></span></div>
+      <div class="hint" style="margin-bottom:15px">La tabla se ordena por el menor MAE de validación. Un menor MAE/MSE indica menos error; un R² más alto indica mayor proporción de variación explicada.</div>
+      <div class="table-wrap"><table id="results-table"></table></div>
+    </section>
+    <footer>Herramienta autocontenida. No envía ni almacena tus datos fuera del navegador.</footer>
+  </main>
+
+  <script>
+    "use strict"; // Activa el modo estricto para detectar errores de programación.
+
+    const state = { headers: [], rows: [], types: {}, categories: {}, source: "" }; // Guarda la tabla cargada y sus metadatos mientras la página está abierta.
+    const fileInput = document.getElementById("file-input"); // Obtiene el selector de archivo de la interfaz.
+    const uploadStatus = document.getElementById("upload-status"); // Obtiene el área para mensajes de carga.
+    const runStatus = document.getElementById("run-status"); // Obtiene el área para mensajes de cálculo.
+    const targetSelect = document.getElementById("target-select"); // Obtiene el selector de variable dependiente.
+    const predictorsBox = document.getElementById("predictors"); // Obtiene el contenedor de variables predictoras.
+    const runButton = document.getElementById("run-button"); // Obtiene el botón que inicia el cálculo.
+
+    function showStatus(element, message, isError = false) { // Muestra un mensaje de estado o error en la interfaz.
+      element.textContent = message; // Inserta el texto del mensaje sin interpretar HTML.
+      element.classList.toggle("error", isError); // Aplica el estilo de error cuando corresponde.
+      element.style.display = "block"; // Hace visible el mensaje.
+    } // Termina la función de mensajes.
+
+    function hideStatus(element) { // Oculta un mensaje de estado.
+      element.style.display = "none"; // Esconde el elemento de estado.
+      element.textContent = ""; // Limpia el mensaje anterior.
+      element.classList.remove("error"); // Quita el estilo de error anterior.
+    } // Termina la función para ocultar mensajes.
+
+    function parseNumber(value) { // Convierte números y textos numéricos con separadores comunes a formato decimal.
+      if (typeof value === "number" && Number.isFinite(value)) return value; // Devuelve directamente valores numéricos válidos.
+      if (value === null || value === undefined || String(value).trim() === "") return null; // Trata valores vacíos como faltantes.
+      let text = String(value).trim().replace(/[\s\u00a0]/g, "").replace(/[^0-9,\.eE+\-]/g, ""); // Limpia espacios, monedas y caracteres ajenos a números.
+      const comma = text.lastIndexOf(","); // Busca la última coma, que puede marcar decimales.
+      const dot = text.lastIndexOf("."); // Busca el último punto, que puede marcar decimales.
+      if (comma >= 0 && dot >= 0) { // Comprueba si están presentes ambos tipos de separador.
+        const decimal = comma > dot ? "," : "."; // Asume que el separador situado más a la derecha es el decimal.
+        const thousands = decimal === "," ? /\./g : /,/g; // Selecciona el separador de miles que se debe eliminar.
+        text = text.replace(thousands, "").replace(decimal, "."); // Normaliza el texto a decimal con punto.
+      } else if (comma >= 0) { // Trata el caso en que solo aparece una coma como separador.
+        const afterComma = text.length - comma - 1; // Cuenta los dígitos que siguen a la coma.
+        text = afterComma === 3 ? text.replace(/,/g, "") : text.replace(",", "."); // Interpreta tres cifras finales como miles y otros casos como decimales.
+      } else if ((text.match(/\./g) || []).length > 1) { // Comprueba si hay varios puntos de agrupación.
+        text = text.replace(/\./g, ""); // Elimina puntos repetidos considerados separadores de miles.
+      } // Termina la normalización de separadores.
+      const number = Number(text); // Intenta convertir el valor normalizado a número.
+      return Number.isFinite(number) ? number : null; // Devuelve el número válido o null si no se pudo interpretar.
+    } // Termina la función de conversión numérica.
+
+    function decodeXml(bytes) { // Convierte bytes de un miembro ZIP a texto XML.
+      return new TextDecoder("utf-8").decode(bytes); // Decodifica los bytes usando UTF-8.
+    } // Termina la decodificación XML.
+
+    async function inflateRaw(bytes) { // Descomprime un miembro ZIP guardado con el método Deflate.
+      if (typeof DecompressionStream === "undefined") throw new Error("Este navegador no ofrece descompresión ZIP integrada; abre el HTML en una versión reciente de Chrome o Edge."); // Comprueba la API moderna de descompresión del navegador.
+      const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw")); // Crea un flujo de descompresión Deflate sin cabecera zlib.
+      return new Uint8Array(await new Response(stream).arrayBuffer()); // Devuelve el contenido descomprimido como bytes.
+    } // Termina la descompresión Deflate.
+
+    async function unzipXlsx(buffer) { // Lee los miembros de un archivo ZIP .xlsx sin librerías externas.
+      const bytes = new Uint8Array(buffer); // Crea una vista de bytes sobre el archivo cargado.
+      const view = new DataView(buffer); // Crea una vista para leer los campos binarios del ZIP.
+      let eocd = -1; // Reserva la posición del directorio central del ZIP.
+      const lowerBound = Math.max(0, bytes.length - 65557); // Limita la búsqueda al tamaño máximo del comentario ZIP más su cabecera.
+      for (let i = bytes.length - 22; i >= lowerBound; i -= 1) { // Recorre hacia atrás buscando el registro final del ZIP.
+        if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; } // Identifica y guarda la posición de la firma EOCD.
+      } // Termina la búsqueda de la cabecera final.
+      if (eocd < 0) throw new Error("No se pudo leer la estructura ZIP del archivo Excel."); // Informa cuando el archivo no parece un libro .xlsx válido.
+      const entryCount = view.getUint16(eocd + 10, true); // Lee la cantidad de miembros del archivo ZIP.
+      let cursor = view.getUint32(eocd + 16, true); // Lee la ubicación del directorio central.
+      const members = new Map(); // Crea un mapa para asociar cada ruta ZIP con su contenido.
+      for (let entry = 0; entry < entryCount; entry += 1) { // Recorre los registros del directorio central.
+        if (view.getUint32(cursor, true) !== 0x02014b50) throw new Error("El archivo Excel tiene un directorio ZIP inválido."); // Valida la firma de cada entrada.
+        const method = view.getUint16(cursor + 10, true); // Lee el método de compresión de la entrada.
+        const compressedSize = view.getUint32(cursor + 20, true); // Lee el tamaño comprimido de la entrada.
+        const nameLength = view.getUint16(cursor + 28, true); // Lee el largo del nombre de la entrada.
+        const extraLength = view.getUint16(cursor + 30, true); // Lee el largo de los datos adicionales.
+        const commentLength = view.getUint16(cursor + 32, true); // Lee el largo del comentario de la entrada.
+        const localOffset = view.getUint32(cursor + 42, true); // Lee la ubicación de la cabecera local de la entrada.
+        const name = decodeXml(bytes.slice(cursor + 46, cursor + 46 + nameLength)); // Lee y decodifica la ruta interna del ZIP.
+        const localNameLength = view.getUint16(localOffset + 26, true); // Lee el largo del nombre en la cabecera local.
+        const localExtraLength = view.getUint16(localOffset + 28, true); // Lee el largo de los datos adicionales locales.
+        const dataOffset = localOffset + 30 + localNameLength + localExtraLength; // Calcula dónde empiezan los datos comprimidos.
+        const compressed = bytes.slice(dataOffset, dataOffset + compressedSize); // Extrae los bytes comprimidos del miembro.
+        let content; // Reserva la variable para el contenido ya descomprimido.
+        if (method === 0) content = compressed; // Conserva los datos directamente cuando están almacenados sin compresión.
+        else if (method === 8) content = await inflateRaw(compressed); // Descomprime los datos cuando utilizan Deflate.
+        else throw new Error(`El Excel utiliza un método ZIP no compatible (${method}).`); // Informa si el método de compresión no es compatible.
+        members.set(name, content); // Guarda el contenido del miembro con su ruta.
+        cursor += 46 + nameLength + extraLength + commentLength; // Avanza hasta el siguiente registro central.
+      } // Termina el recorrido del directorio central.
+      return members; // Devuelve todos los miembros extraídos del libro.
+    } // Termina la lectura ZIP.
+
+    function xmlElements(xml, localName) { // Busca elementos XML por nombre local sin depender del espacio de nombres.
+      return Array.from(xml.getElementsByTagNameNS("*", localName)); // Devuelve los elementos coincidentes en una lista.
+    } // Termina la consulta de elementos XML.
+
+    function columnIndex(cellReference) { // Convierte una referencia Excel como C7 a un índice de columna desde cero.
+      const letters = cellReference.match(/^[A-Z]+/i)?.[0] || "A"; // Extrae las letras de columna de la referencia de celda.
+      let index = 0; // Inicializa el índice numérico de columna.
+      for (const letter of letters.toUpperCase()) index = index * 26 + letter.charCodeAt(0) - 64; // Convierte las letras de columna a base 26.
+      return index - 1; // Ajusta el índice para que la primera columna sea cero.
+    } // Termina la conversión de columna.
+
+    async function readXlsx(file) { // Extrae la primera hoja de un libro .xlsx.
+      const members = await unzipXlsx(await file.arrayBuffer()); // Lee y descomprime la estructura ZIP del libro.
+      const readXml = (path) => { const item = members.get(path); if (!item) throw new Error(`Falta el componente ${path} en el libro Excel.`); return new DOMParser().parseFromString(decodeXml(item), "application/xml"); }; // Define un lector breve de XML interno.
+      const workbook = readXml("xl/workbook.xml"); // Lee el listado de hojas del libro.
+      const relationships = readXml("xl/_rels/workbook.xml.rels"); // Lee las rutas internas asociadas a las hojas.
+      const firstSheet = xmlElements(workbook, "sheet")[0]; // Selecciona la primera hoja visible del libro.
+      if (!firstSheet) throw new Error("El libro Excel no contiene hojas de datos."); // Informa si el libro está vacío.
+      const relationId = firstSheet.getAttribute("r:id") || Array.from(firstSheet.attributes).find((attribute) => attribute.localName === "id")?.value; // Obtiene el identificador de relación de la hoja.
+      const relation = xmlElements(relationships, "Relationship").find((item) => item.getAttribute("Id") === relationId); // Busca la ruta ZIP del XML correspondiente a la hoja.
+      if (!relation) throw new Error("No se encontró la ruta de la primera hoja de Excel."); // Informa si la relación de hoja está ausente.
+      const target = relation.getAttribute("Target").replace(/^\//, ""); // Normaliza la ruta interna declarada por Excel.
+      const sheetPath = target.startsWith("xl/") ? target : `xl/${target.replace(/^\.\//, "")}`; // Resuelve la ruta de la hoja dentro del ZIP.
+      const sheet = readXml(sheetPath); // Lee el contenido XML de la primera hoja.
+      const sharedStrings = members.has("xl/sharedStrings.xml") ? xmlElements(readXml("xl/sharedStrings.xml"), "si").map((item) => xmlElements(item, "t").map((text) => text.textContent).join("")) : []; // Lee las cadenas compartidas cuando el libro las utiliza.
+      const rowMap = new Map(); // Crea un mapa para reconstruir las filas por su número Excel.
+      for (const cell of xmlElements(sheet, "c")) { // Recorre todas las celdas de la hoja.
+        const reference = cell.getAttribute("r") || "A1"; // Obtiene la referencia de celda, como A1 o D15.
+        const rowNumber = Number(reference.match(/\d+/)?.[0] || 1) - 1; // Convierte el número Excel de fila a índice desde cero.
+        const colNumber = columnIndex(reference); // Convierte la letra de columna a índice desde cero.
+        const type = cell.getAttribute("t"); // Lee el tipo almacenado para esta celda.
+        const valueNode = xmlElements(cell, "v")[0]; // Busca el valor escalar de la celda.
+        const inlineNode = xmlElements(cell, "is")[0]; // Busca texto guardado directamente en la celda.
+        let value = valueNode ? valueNode.textContent : ""; // Lee el valor bruto o utiliza cadena vacía si falta.
+        if (type === "s") value = sharedStrings[Number(value)] ?? ""; // Resuelve el índice cuando la celda usa cadenas compartidas.
+        else if (type === "inlineStr") value = inlineNode ? xmlElements(inlineNode, "t").map((text) => text.textContent).join("") : ""; // Lee las cadenas guardadas en línea.
+        else if (type === "b") value = value === "1"; // Convierte indicadores booleanos de Excel a true o false.
+        else if (type === "e") value = ""; // Trata errores de celda como valores faltantes.
+        else if (value !== "" && Number.isFinite(Number(value))) value = Number(value); // Convierte valores numéricos de Excel a números de JavaScript.
+        if (!rowMap.has(rowNumber)) rowMap.set(rowNumber, []); // Crea la fila si todavía no existe en el mapa.
+        rowMap.get(rowNumber)[colNumber] = value; // Coloca el valor en su posición de columna.
+      } // Termina el recorrido de celdas.
+      return { rows: Array.from(rowMap.entries()).sort((a, b) => a[0] - b[0]).map((entry) => entry[1]), sheetName: firstSheet.getAttribute("name") || "Hoja 1" }; // Devuelve las filas ordenadas y el nombre de hoja.
+    } // Termina la lectura de Excel.
+
+    function detectDelimiter(text) { // Elige el delimitador más probable en un archivo de texto tabular.
+      const firstLines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim()).slice(0, 8); // Obtiene algunas filas iniciales no vacías.
+      const options = [",", ";", "\t", "|"]; // Define delimitadores de coma, punto y coma, tabulador y barra vertical.
+      const score = (line, delimiter) => { let count = 0; let quoted = false; for (let i = 0; i < line.length; i += 1) { if (line[i] === '"') quoted = !quoted; else if (line[i] === delimiter && !quoted) count += 1; } return count; }; // Cuenta delimitadores que no estén dentro de comillas.
+      const totals = options.map((delimiter) => firstLines.reduce((sum, line) => sum + score(line, delimiter), 0)); // Suma las coincidencias por delimitador.
+      const best = Math.max(...totals); // Obtiene la puntuación más alta.
+      return best > 0 ? options[totals.indexOf(best)] : "whitespace"; // Devuelve el delimitador mejor puntuado o espacios.
+    } // Termina la detección de delimitador.
+
+    function parseDelimited(text, delimiter) { // Convierte el contenido delimitado en filas y celdas respetando comillas.
+      const rows = []; // Inicializa el arreglo de filas resultante.
+      let row = []; // Inicializa las celdas de la fila actual.
+      let cell = ""; // Inicializa el contenido de la celda actual.
+      let quoted = false; // Guarda si el lector está dentro de una celda entrecomillada.
+      const input = text.replace(/^\uFEFF/, ""); // Quita un posible marcador BOM del inicio del archivo.
+      if (delimiter === "whitespace") return input.split(/\r?\n/).filter((line) => line.trim()).map((line) => line.trim().split(/\s+/)); // Divide texto simple delimitado por espacios.
+      for (let i = 0; i < input.length; i += 1) { // Recorre cada carácter del documento.
+        const char = input[i]; // Obtiene el carácter actual.
+        if (char === '"' && quoted && input[i + 1] === '"') { cell += '"'; i += 1; } // Conserva una comilla escapada dentro de una celda.
+        else if (char === '"') quoted = !quoted; // Alterna el estado de lectura dentro de comillas.
+        else if (char === delimiter && !quoted) { row.push(cell); cell = ""; } // Finaliza la celda si aparece el delimitador fuera de comillas.
+        else if ((char === "\n" || char === "\r") && !quoted) { if (char === "\r" && input[i + 1] === "\n") i += 1; row.push(cell); rows.push(row); row = []; cell = ""; } // Finaliza la fila cuando encuentra un salto de línea fuera de comillas.
+        else cell += char; // Añade el carácter actual al contenido de la celda.
+      } // Termina el recorrido del texto.
+      if (cell.length || row.length) { row.push(cell); rows.push(row); } // Agrega la última celda y fila si el archivo no termina en salto de línea.
+      return rows; // Devuelve todas las filas analizadas.
+    } // Termina el lector delimitado.
+
+    function normalizeTable(rawRows) { // Limpia encabezados, filas vacías y columnas sin nombre.
+      const nonempty = rawRows.filter((row) => row.some((value) => String(value ?? "").trim() !== "")); // Quita filas completamente vacías.
+      if (nonempty.length < 2) throw new Error("El archivo debe contener una fila de encabezados y al menos una fila de datos."); // Valida que haya encabezados y registros.
+      const width = Math.max(...nonempty.map((row) => row.length)); // Calcula el mayor número de columnas en las filas.
+      const headers = Array.from({ length: width }, (_, index) => String(nonempty[0][index] ?? "").trim() || `Columna ${index + 1}`); // Obtiene encabezados o crea nombres para columnas sin encabezado.
+      const counts = new Map(); // Reserva un contador para evitar encabezados duplicados.
+      const uniqueHeaders = headers.map((header) => { const next = (counts.get(header) || 0) + 1; counts.set(header, next); return next === 1 ? header : `${header} (${next})`; }); // Añade sufijos a nombres de columna repetidos.
+      const rows = nonempty.slice(1).map((row) => Array.from({ length: width }, (_, index) => row[index] === undefined ? null : row[index])); // Ajusta cada fila al número de columnas detectado.
+      return { headers: uniqueHeaders, rows }; // Devuelve encabezados únicos y filas rectangulares.
+    } // Termina la normalización.
+
+    function classifyColumns(headers, rows) { // Detecta columnas numéricas y categóricas según sus valores no vacíos.
+      const types = {}; // Inicializa el mapa de tipos por nombre de columna.
+      const categories = {}; // Inicializa el mapa de categorías por nombre de columna.
+      headers.forEach((header, index) => { const values = rows.map((row) => row[index]).filter((value) => value !== null && String(value).trim() !== ""); const numbers = values.map(parseNumber); const numeric = values.length > 0 && numbers.every((value) => value !== null); types[header] = numeric ? "numérica" : "categórica"; categories[header] = Array.from(new Set(values.map((value) => String(value).trim()))); }); // Infere tipo y categorías para cada columna.
+      return { types, categories }; // Devuelve los tipos y niveles categóricos detectados.
+    } // Termina la clasificación de columnas.
+
+    function escapeHtml(value) { // Escapa caracteres especiales antes de insertar nombres del archivo en HTML.
+      return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]); // Sustituye caracteres HTML por entidades seguras.
+    } // Termina la función de escape HTML.
+
+    function renderData() { // Dibuja el resumen, tipos, vista previa y selectores de variables.
+      document.getElementById("file-name").textContent = state.source; // Muestra el nombre y el detalle del archivo cargado.
+      const numericCount = Object.values(state.types).filter((type) => type === "numérica").length; // Cuenta las variables numéricas.
+      const categoryCount = state.headers.length - numericCount; // Calcula cuántas variables categóricas hay.
+      const summary = document.getElementById("data-summary"); // Obtiene el contenedor de resumen.
+      summary.replaceChildren(); // Limpia el resumen anterior.
+      [[`${state.rows.length} filas`, ""], [`${state.headers.length} variables`, ""], [`${numericCount} numéricas`, "numeric"], [`${categoryCount} categóricas`, "category"]].forEach(([text, type]) => { const pill = document.createElement("span"); pill.className = `pill ${type}`; pill.textContent = text; summary.appendChild(pill); }); // Dibuja una etiqueta para cada conteo.
+      state.headers.forEach((header) => { const pill = document.createElement("span"); pill.className = `pill ${state.types[header] === "numérica" ? "numeric" : "category"}`; pill.textContent = `${header} · ${state.types[header]}`; summary.appendChild(pill); }); // Añade una etiqueta de tipo por columna.
+      summary.classList.remove("hidden"); // Hace visible el resumen del archivo.
+      const preview = document.getElementById("preview-table"); // Obtiene la tabla de vista previa.
+      preview.innerHTML = `<thead><tr>${state.headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead><tbody>${state.rows.slice(0, 8).map((row) => `<tr>${row.map((value) => `<td>${escapeHtml(value ?? "")}</td>`).join("")}</tr>`).join("")}</tbody>`; // Inserta hasta ocho filas de datos como vista previa.
+      document.getElementById("preview-section").classList.remove("hidden"); // Muestra la vista previa.
+      targetSelect.innerHTML = state.headers.filter((header) => state.types[header] === "numérica").map((header) => `<option value="${escapeHtml(header)}">${escapeHtml(header)}</option>`).join(""); // Permite elegir únicamente variables numéricas para Y.
+      if (!targetSelect.options.length) throw new Error("No se detectaron variables numéricas para utilizar como variable Y."); // Informa si ninguna columna sirve como objetivo numérico.
+      targetSelect.value = state.headers.find((header) => /ingreso|income|salary|salario|y$/i.test(header) && state.types[header] === "numérica") || targetSelect.options[0].value; // Sugiere una columna objetivo con nombre frecuente o la primera numérica.
+      renderPredictors(); // Dibuja las opciones actuales de variables X.
+      document.getElementById("variable-count").textContent = `${state.headers.length} detectadas`; // Muestra la cantidad total de variables.
+      document.getElementById("selection-card").classList.remove("hidden"); // Muestra el panel de selección de variables.
+      document.getElementById("results-section").classList.add("hidden"); // Oculta resultados antiguos al cambiar el archivo.
+    } // Termina el renderizado de datos.
+
+    function renderPredictors() { // Dibuja las casillas de selección de variables X.
+      const current = new Set(Array.from(predictorsBox.querySelectorAll("input:checked")).map((input) => input.value)); // Conserva las X que ya estaban seleccionadas.
+      predictorsBox.replaceChildren(); // Limpia el listado de predictores.
+      state.headers.filter((header) => header !== targetSelect.value).forEach((header) => { const label = document.createElement("label"); label.className = "predictor"; const checkbox = document.createElement("input"); checkbox.type = "checkbox"; checkbox.value = header; checkbox.checked = current.has(header); const name = document.createElement("span"); name.className = "predictor-name"; name.textContent = header; const kind = document.createElement("small"); kind.textContent = state.types[header]; label.append(checkbox, name, kind); predictorsBox.appendChild(label); }); // Añade cada predictor disponible con su tipo.
+      const firstAvailable = predictorsBox.querySelector("input"); // Busca la primera variable X disponible.
+      if (firstAvailable && !predictorsBox.querySelector("input:checked")) firstAvailable.checked = true; // Selecciona la primera X automáticamente cuando el usuario aún no eligió ninguna.
+      updateRunButton(); // Actualiza disponibilidad y conteo de modelos.
+    } // Termina el renderizado de predictores.
+
+    function updateRunButton() { // Actualiza el botón y el conteo previsto de modelos.
+      const selected = Array.from(predictorsBox.querySelectorAll("input:checked")); // Obtiene las variables X marcadas.
+      const valid = selected.length > 0 && selected.length <= 8; // Limita a entre una y ocho X para mantener la generación de modelos ágil.
+      runButton.disabled = !valid; // Habilita el cálculo solo con una selección permitida.
+      document.getElementById("model-count").textContent = selected.length > 8 ? "Selecciona máximo 8 variables X (hasta 255 modelos)." : selected.length ? `Se generarán ${2 ** selected.length - 1} combinaciones de variables.` : "Selecciona al menos una variable X."; // Explica el número de modelos posibles.
+    } // Termina la actualización del botón.
+
+    function seededRandom(seed) { // Crea un generador pseudoaleatorio reproducible.
+      let value = seed >>> 0; // Inicializa el estado entero sin signo.
+      return function () { value += 0x6D2B79F5; let t = value; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; // Devuelve números reproducibles entre cero y uno.
+    } // Termina el generador pseudoaleatorio.
+
+    function dot(a, b) { // Calcula el producto escalar de dos vectores.
+      let total = 0; // Inicializa el acumulador del producto escalar.
+      for (let i = 0; i < a.length; i += 1) total += a[i] * b[i]; // Suma el producto de cada par de posiciones.
+      return total; // Devuelve el producto escalar acumulado.
+    } // Termina el producto escalar.
+
+    function fitLeastSquares(features, target) { // Ajusta una regresión lineal por mínimos cuadrados con QR y pivoteo de columnas.
+      const rowCount = features.length; // Obtiene el número de observaciones de entrenamiento.
+      const featureCount = features[0].length + 1; // Cuenta las variables predictoras y el intercepto.
+      const columns = Array.from({ length: featureCount }, (_, col) => Array.from({ length: rowCount }, (_, row) => col === 0 ? 1 : features[row][col - 1])); // Convierte la matriz de diseño a columnas e incorpora intercepto.
+      const permutation = Array.from({ length: featureCount }, (_, index) => index); // Registra el orden original de las columnas.
+      const upper = Array.from({ length: featureCount }, () => Array(featureCount).fill(0)); // Crea la matriz triangular superior R.
+      const qTarget = Array(featureCount).fill(0); // Reserva los productos de cada vector Q por la variable objetivo.
+      const initialNorm = Math.max(...columns.map((column) => Math.sqrt(dot(column, column)))); // Estima la escala inicial para detectar columnas redundantes.
+      const tolerance = Math.max(initialNorm * 1e-11, 1e-12); // Define una tolerancia numérica para reconocer dependencia lineal.
+      let rank = 0; // Inicializa el rango numérico de la matriz de diseño.
+      for (let k = 0; k < Math.min(rowCount, featureCount); k += 1) { // Recorre columnas hasta llegar al rango de filas o variables.
+        let pivot = k; // Supone que la columna actual es el mejor pivote.
+        let pivotNorm = dot(columns[k], columns[k]); // Calcula la norma cuadrada del pivote actual.
+        for (let j = k + 1; j < featureCount; j += 1) { const candidateNorm = dot(columns[j], columns[j]); if (candidateNorm > pivotNorm) { pivot = j; pivotNorm = candidateNorm; } } // Busca la columna residual de mayor norma.
+        if (pivot !== k) { const tempColumn = columns[k]; columns[k] = columns[pivot]; columns[pivot] = tempColumn; const tempPermutation = permutation[k]; permutation[k] = permutation[pivot]; permutation[pivot] = tempPermutation; for (let i = 0; i < k; i += 1) { const temp = upper[i][k]; upper[i][k] = upper[i][pivot]; upper[i][pivot] = temp; } } // Intercambia el pivote elegido y conserva las columnas previamente calculadas de R.
+        const norm = Math.sqrt(dot(columns[k], columns[k])); // Calcula la longitud de la columna pivote residual.
+        if (norm <= tolerance) break; // Finaliza si las columnas restantes son linealmente redundantes.
+        upper[k][k] = norm; // Guarda el elemento diagonal de la matriz R.
+        const q = columns[k].map((value) => value / norm); // Normaliza la columna para formar el vector ortogonal Q.
+        qTarget[k] = dot(q, target); // Proyecta la variable objetivo sobre el vector Q actual.
+        for (let j = k + 1; j < featureCount; j += 1) { const projection = dot(q, columns[j]); upper[k][j] = projection; for (let row = 0; row < rowCount; row += 1) columns[j][row] -= projection * q[row]; } // Quita de las columnas pendientes su componente en la dirección actual.
+        rank += 1; // Aumenta el rango efectivo del modelo.
+      } // Termina la factorización QR con pivoteo.
+      const pivotedCoefficients = Array(featureCount).fill(0); // Inicializa los coeficientes en el orden pivoteado.
+      for (let i = rank - 1; i >= 0; i -= 1) { let value = qTarget[i]; for (let j = i + 1; j < rank; j += 1) value -= upper[i][j] * pivotedCoefficients[j]; pivotedCoefficients[i] = value / upper[i][i]; } // Resuelve el sistema triangular superior por sustitución hacia atrás.
+      const coefficients = Array(featureCount).fill(0); // Inicializa los coeficientes en su orden original.
+      permutation.forEach((originalIndex, pivotIndex) => { coefficients[originalIndex] = pivotedCoefficients[pivotIndex]; }); // Devuelve cada coeficiente a la columna que representa.
+      return coefficients; // Devuelve el intercepto seguido por los coeficientes de las variables.
+    } // Termina el ajuste lineal.
+
+    function predict(features, coefficients) { // Calcula predicciones aplicando intercepto y pendientes.
+      return features.map((row) => coefficients[0] + row.reduce((sum, value, index) => sum + value * coefficients[index + 1], 0)); // Devuelve el valor predicho para cada fila.
+    } // Termina la predicción.
+
+    function calculateMetrics(actual, predicted) { // Calcula MAE, MSE y R cuadrado para un conjunto.
+      const errors = actual.map((value, index) => value - predicted[index]); // Calcula los residuos del modelo.
+      const mae = errors.reduce((sum, error) => sum + Math.abs(error), 0) / errors.length; // Calcula el error absoluto medio.
+      const mse = errors.reduce((sum, error) => sum + error * error, 0) / errors.length; // Calcula el error cuadrático medio.
+      const average = actual.reduce((sum, value) => sum + value, 0) / actual.length; // Calcula el promedio de valores reales.
+      const total = actual.reduce((sum, value) => sum + (value - average) ** 2, 0); // Calcula la suma total de cuadrados.
+      const r2 = total === 0 ? null : 1 - errors.reduce((sum, error) => sum + error * error, 0) / total; // Calcula R² o deja vacío si Y no varía en el conjunto.
+      return { mae, mse, r2 }; // Devuelve el trío de métricas.
+    } // Termina el cálculo de métricas.
+
+    function formatMetric(value, decimals = 2) { // Formatea una métrica para mostrarla en la tabla.
+      if (value === null || !Number.isFinite(value)) return "—"; // Muestra una raya cuando la métrica no está definida.
+      return new Intl.NumberFormat("es-CO", { maximumFractionDigits: decimals, minimumFractionDigits: decimals }).format(value); // Utiliza separadores y formato decimal regional.
+    } // Termina el formateo de métricas.
+
+    function buildFeatures(allRows, headers, types, categories, selectedFeatures) { // Codifica X numéricas y categóricas para una combinación de modelo.
+      const encodings = {}; // Inicializa las columnas codificadas por variable original.
+      for (const feature of selectedFeatures) { // Recorre las variables X seleccionadas para el modelo.
+        if (types[feature] === "numérica") { encodings[feature] = [{ name: feature, values: allRows.map((row) => parseNumber(row[headers.indexOf(feature)])) }]; } // Usa una sola columna para cada predictor numérico.
+        else { const levels = categories[feature]; encodings[feature] = levels.slice(1).map((level) => ({ name: `${feature}=${level}`, values: allRows.map((row) => String(row[headers.indexOf(feature)]).trim() === level ? 1 : 0) })); } // Crea indicadores categóricos y omite la primera categoría como referencia.
+      } // Termina la codificación de efectos principales.
+      const terms = selectedFeatures.flatMap((feature) => encodings[feature]); // Combina los efectos principales de todas las variables del modelo.
+      const includeInteractions = document.getElementById("interaction-toggle").checked; // Lee si el usuario pidió productos de interacción.
+      if (includeInteractions) { for (let i = 0; i < selectedFeatures.length; i += 1) for (let j = i + 1; j < selectedFeatures.length; j += 1) for (const left of encodings[selectedFeatures[i]]) for (const right of encodings[selectedFeatures[j]]) terms.push({ name: `${left.name} × ${right.name}`, values: left.values.map((value, row) => value * right.values[row]) }); } // Añade el producto de cada par de columnas de variables diferentes.
+      return terms; // Devuelve nombres y datos de los términos del modelo.
+    } // Termina la codificación y expansión de variables.
+
+    function renderResults(results, selectedFeatures, trainShare, totalRows, completeRows) { // Dibuja la tabla de métricas para todos los modelos calculados.
+      results.sort((a, b) => (a.validation.mae ?? Infinity) - (b.validation.mae ?? Infinity)); // Ordena la tabla por MAE de validación ascendente.
+      const best = results[0]; // Selecciona el primer modelo después de ordenar por MAE.
+      const validationPercent = Math.round((1 - trainShare) * 100); // Calcula el porcentaje de validación.
+      document.getElementById("result-caption").textContent = `${results.length} modelos · ${completeRows} filas completas de ${totalRows} · ${Math.round(trainShare * 100)} % entrenamiento / ${validationPercent} % validación`; // Resume cuántos modelos y filas se evaluaron.
+      document.getElementById("best-model-pill").textContent = `Menor MAE validación: ${best.name}`; // Destaca el modelo con menor MAE de validación.
+      const headers = ["Modelo", "Variables y términos", "MAE validación", "MSE validación", "R² validación", "MAE entrenamiento", "MSE entrenamiento", "R² entrenamiento"]; // Define los encabezados para métricas de los dos conjuntos.
+      const head = `<thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>`; // Crea la cabecera HTML de la tabla.
+      const body = results.map((result, index) => `<tr class="${index === 0 ? "best" : ""}"><td><span class="model-name">${escapeHtml(result.name)}</span>${index === 0 ? '<span class="best-mark">mejor MAE</span>' : ""}</td><td class="model-terms" title="${escapeHtml(result.terms.join(", "))}">${escapeHtml(result.terms.join(", ") || "Solo intercepto")}</td><td class="metric-cell">${formatMetric(result.validation.mae)}</td><td class="metric-cell">${formatMetric(result.validation.mse)}</td><td class="metric-cell">${formatMetric(result.validation.r2, 4)}</td><td class="metric-cell">${formatMetric(result.training.mae)}</td><td class="metric-cell">${formatMetric(result.training.mse)}</td><td class="metric-cell">${formatMetric(result.training.r2, 4)}</td></tr>`).join(""); // Crea una fila de tabla con validación y entrenamiento para cada modelo.
+      document.getElementById("results-table").innerHTML = `${head}<tbody>${body}</tbody>`; // Inserta la tabla completa en la página.
+      document.getElementById("results-section").classList.remove("hidden"); // Muestra la sección de resultados.
+      document.getElementById("results-section").scrollIntoView({ behavior: "smooth", block: "start" }); // Desplaza la página hasta los resultados.
+    } // Termina la tabla de resultados.
+
+    async function handleFile(file) { // Lee el archivo seleccionado e identifica sus variables.
+      hideStatus(uploadStatus); // Limpia mensajes de carga anteriores.
+      if (!file) return; // Termina si no se eligió ningún archivo.
+      const extension = file.name.split(".").pop().toLowerCase(); // Obtiene la extensión para determinar cómo se debe leer.
+      try { // Inicia el manejo de errores del archivo.
+        let rawRows; // Reserva las filas brutas del archivo.
+        let sourceDetail = ""; // Reserva texto opcional de detalle del archivo.
+        if (extension === "xlsx") { const workbook = await readXlsx(file); rawRows = workbook.rows; sourceDetail = ` · Hoja: ${workbook.sheetName}`; } // Lee la primera hoja de un libro Excel XLSX.
+        else if (["csv", "tsv", "txt"].includes(extension)) { const text = await file.text(); const delimiter = extension === "tsv" ? "\t" : detectDelimiter(text); rawRows = parseDelimited(text, delimiter); sourceDetail = ` · Delimitador: ${delimiter === "\t" ? "tabulador" : delimiter === "whitespace" ? "espacio" : delimiter}`; } // Lee CSV, TSV o texto delimitado.
+        else throw new Error("Formato no compatible. Usa .xlsx, .csv, .tsv o .txt."); // Rechaza extensiones que no admite el aplicativo.
+        const table = normalizeTable(rawRows); // Normaliza los encabezados y las filas del archivo.
+        const detected = classifyColumns(table.headers, table.rows); // Clasifica las columnas como numéricas o categóricas.
+        state.headers = table.headers; // Guarda los encabezados en el estado de la aplicación.
+        state.rows = table.rows; // Guarda las filas en el estado de la aplicación.
+        state.types = detected.types; // Guarda los tipos detectados.
+        state.categories = detected.categories; // Guarda los niveles categóricos detectados.
+        state.source = `${file.name}${sourceDetail}`; // Guarda el nombre y origen del archivo para mostrarlo.
+        renderData(); // Actualiza resumen, vista previa y selectores.
+        showStatus(uploadStatus, "Archivo cargado. Revisa las variables detectadas y configura los modelos."); // Confirma la carga correcta del archivo.
+      } catch (error) { showStatus(uploadStatus, error.message || "No se pudo leer este archivo.", true); } // Muestra cualquier error de lectura en la página.
+    } // Termina la carga y detección de variables.
+
+    function runModels() { // Genera todas las combinaciones de X y calcula sus métricas.
+      hideStatus(runStatus); // Limpia mensajes de cálculos anteriores.
+      document.getElementById("results-section").classList.add("hidden"); // Oculta resultados anteriores mientras se recalcula.
+      const targetName = targetSelect.value; // Lee la variable dependiente seleccionada.
+      const selectedFeatures = Array.from(predictorsBox.querySelectorAll("input:checked")).map((input) => input.value); // Lee las variables independientes seleccionadas.
+      const maxFeatures = 8; // Define un máximo práctico para limitar el número exponencial de modelos.
+      if (selectedFeatures.length === 0) { showStatus(runStatus, "Selecciona al menos una variable X.", true); return; } // Valida que haya predictores elegidos.
+      if (selectedFeatures.length > maxFeatures) { showStatus(runStatus, `Selecciona máximo ${maxFeatures} variables X para generar todas las combinaciones.`, true); return; } // Limita el total de modelos a 255.
+      const allFeatures = [targetName, ...selectedFeatures]; // Define las columnas requeridas para una comparación justa entre modelos.
+      const columnIndexes = Object.fromEntries(allFeatures.map((name) => [name, state.headers.indexOf(name)])); // Resuelve el índice de cada columna requerida.
+      const completeRows = state.rows.filter((row) => allFeatures.every((name) => { const value = row[columnIndexes[name]]; return value !== null && String(value).trim() !== "" && (name === targetName ? parseNumber(value) !== null : state.types[name] !== "numérica" || parseNumber(value) !== null); })); // Conserva los mismos registros completos para todos los modelos.
+      if (completeRows.length < 4) { showStatus(runStatus, "Se necesitan al menos cuatro filas completas en Y y las X seleccionadas.", true); return; } // Comprueba que haya filas suficientes para una partición.
+      const target = completeRows.map((row) => parseNumber(row[columnIndexes[targetName]])); // Convierte la variable Y a una serie numérica.
+      const trainShare = Number(document.getElementById("split-select").value); // Lee la proporción de entrenamiento elegida.
+      const order = Array.from({ length: completeRows.length }, (_, index) => index); // Crea los índices de filas para mezclarlos antes de separar.
+      const random = seededRandom(42); // Inicializa la misma semilla para resultados reproducibles.
+      for (let i = order.length - 1; i > 0; i -= 1) { const j = Math.floor(random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; } // Baraja los índices mediante Fisher-Yates.
+      const trainCount = Math.floor(completeRows.length * trainShare); // Calcula el número de filas de entrenamiento.
+      const trainingIndexes = order.slice(0, trainCount); // Separa los índices de entrenamiento.
+      const validationIndexes = order.slice(trainCount); // Separa los índices de validación.
+      const models = []; // Inicializa la lista de resultados por modelo.
+      for (let mask = 1; mask < 2 ** selectedFeatures.length; mask += 1) { // Recorre todas las combinaciones no vacías de variables X.
+        const modelFeatures = selectedFeatures.filter((_, index) => mask & (1 << index)); // Obtiene las X incluidas por la máscara binaria actual.
+        const terms = buildFeatures(completeRows, state.headers, state.types, state.categories, modelFeatures); // Construye términos principales e interacciones de este modelo.
+        if (terms.length > 180) { showStatus(runStatus, `La combinación «${modelFeatures.join(" + ") }» genera ${terms.length} términos y supera el límite práctico de 180. Reduce las X seleccionadas o el número de categorías para calcular todos los modelos sin omitir combinaciones.`, true); return; } // Detiene el cálculo con un aviso claro en lugar de omitir modelos silenciosamente.
+        const matrix = completeRows.map((_, row) => terms.map((term) => term.values[row])); // Construye la matriz de diseño para todas las filas válidas.
+        const xTrain = trainingIndexes.map((index) => matrix[index]); // Extrae la matriz de diseño de entrenamiento.
+        const yTrain = trainingIndexes.map((index) => target[index]); // Extrae los valores Y de entrenamiento.
+        const xValidation = validationIndexes.map((index) => matrix[index]); // Extrae la matriz de diseño de validación.
+        const yValidation = validationIndexes.map((index) => target[index]); // Extrae los valores Y de validación.
+        const coefficients = fitLeastSquares(xTrain, yTrain); // Ajusta los coeficientes solo con el conjunto de entrenamiento.
+        const trainPredictions = predict(xTrain, coefficients); // Calcula predicciones del conjunto de entrenamiento.
+        const validationPredictions = predict(xValidation, coefficients); // Calcula predicciones del conjunto de validación.
+        models.push({ name: modelFeatures.join(" + "), features: modelFeatures, terms: terms.map((term) => term.name), training: calculateMetrics(yTrain, trainPredictions), validation: calculateMetrics(yValidation, validationPredictions) }); // Guarda nombres, términos y métricas de este modelo.
+      } // Termina la generación de combinaciones de variables.
+      if (!models.length) { showStatus(runStatus, "No se pudieron generar modelos; revisa el número de categorías o las variables seleccionadas.", true); return; } // Informa si todos los modelos excedieron los límites de términos.
+      renderResults(models, selectedFeatures, trainShare, state.rows.length, completeRows.length); // Presenta las métricas comparativas de los modelos.
+      showStatus(runStatus, `${models.length} modelos calculados con una partición reproducible (semilla 42).`); // Confirma cuántos modelos se calcularon.
+    } // Termina el cálculo de modelos.
+
+    fileInput.addEventListener("change", (event) => handleFile(event.target.files[0])); // Carga el archivo elegido por el usuario.
+    targetSelect.addEventListener("change", renderPredictors); // Actualiza las variables X al cambiar la variable Y.
+    predictorsBox.addEventListener("change", updateRunButton); // Actualiza el conteo de modelos al modificar X.
+    document.getElementById("interaction-toggle").addEventListener("change", updateRunButton); // Mantiene la selección de modelos sincronizada con la opción de interacciones.
+    runButton.addEventListener("click", runModels); // Inicia el análisis cuando se pulsa el botón principal.
+  </script>
+</body>
+</html>
